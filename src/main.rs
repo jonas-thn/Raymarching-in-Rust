@@ -19,34 +19,43 @@ fn main() {
 
     let mut app: Option<App> = None;
 
-    event_loop.run(move |event, window_target| 
-        match event {
-        Event::Resumed => {
-            let window = Arc::new(
-                window_target.create_window(
-                        Window::default_attributes()
-                            .with_title("Raymarching in Rust")
-                            .with_inner_size(LogicalSize::new(WIDTH, HEIGHT))
-                            .with_min_inner_size(LogicalSize::new(WIDTH, HEIGHT))
-                    ).unwrap(),
-            );
+    event_loop
+        .run(move |event, window_target| match event {
+            Event::Resumed => {
+                let window = Arc::new(
+                    window_target
+                        .create_window(
+                            Window::default_attributes()
+                                .with_title("Raymarching in Rust")
+                                .with_inner_size(LogicalSize::new(WIDTH, HEIGHT))
+                                .with_min_inner_size(LogicalSize::new(WIDTH, HEIGHT)),
+                        )
+                        .unwrap(),
+                );
 
-            let pixels = {
-                let window_size = window.inner_size();
-                let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, window.clone());
-                Pixels::new(WIDTH, HEIGHT, surface_texture).unwrap()
-            };
+                let pixels = {
+                    let window_size = window.inner_size();
+                    let surface_texture = SurfaceTexture::new(
+                        window_size.width,
+                        window_size.height,
+                        window.clone(),
+                    );
+                    Pixels::new(WIDTH, HEIGHT, surface_texture).unwrap()
+                };
 
-            app = Some(App::new(window, pixels));
-        }
-
-
-        Event::WindowEvent { window_id: _, event } => {
-            if let Some(app) = app.as_mut() {
-                app.handle_event(event, window_target);
+                app = Some(App::new(window, pixels, WIDTH, HEIGHT));
             }
-        }
 
-        _ => ()
-    }).unwrap();
+            Event::WindowEvent {
+                window_id: _,
+                event,
+            } => {
+                if let Some(app) = app.as_mut() {
+                    app.handle_event(event, window_target);
+                }
+            }
+
+            _ => (),
+        })
+        .unwrap();
 }
