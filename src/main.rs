@@ -1,4 +1,6 @@
 mod app;
+mod scene;
+
 use app::App;
 
 use pixels::{Pixels, SurfaceTexture};

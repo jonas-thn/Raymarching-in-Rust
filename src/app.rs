@@ -1,6 +1,8 @@
 use pixels::Pixels;
 use std::sync::Arc;
 use winit::{event::WindowEvent, event_loop::ActiveEventLoop, window::Window};
+use glam::Vec3;
+use crate::scene::{self, scene_sdf};
 
 pub struct App<'a> {
     window: Arc<Window>,
@@ -58,6 +60,8 @@ impl<'a> App<'a> {
         
         let aspect_ratio = self.width as f32 / self.height as f32;
 
+        let camera_pos = Vec3::new (0.0, 0.0, -3.0);
+
         for (i, pixel) in frame.chunks_exact_mut(4).enumerate() {
             let x = (i % self.width as usize) as u32; //0-800
             let y = (i / self.width as usize) as u32; //0-600
@@ -66,13 +70,38 @@ impl<'a> App<'a> {
             let v = (y as f32 / self.height as f32) - 0.5; //-0.5 to 0.5
 
             let u_corrected = u * aspect_ratio; //x axis bigger or smaller based on aspect ratio
-            
-            let r = ((u_corrected + 0.5) * 255.0) as u8;
-            let g = ((v + 0.5) * 255.0) as u8;
-            let b = 128;
 
-            let rgba = [r, g, b, 0xFF];
-            pixel.copy_from_slice(&rgba);
+            let ray_dir = Vec3::new(u_corrected, -v, 1.0).normalize();
+
+            //Raymarching
+            let mut total_distance_traveled = 0.0;
+            let mut current_pos = camera_pos;
+            let mut hit = false;
+
+            for _step in 0..100 {
+                let dist_to_scene = scene_sdf(current_pos);
+                
+                if dist_to_scene < 0.001 {
+                    hit = true;
+                    break;
+                }
+
+                current_pos += ray_dir * dist_to_scene;
+                total_distance_traveled += dist_to_scene;
+
+                if(total_distance_traveled > 100.0) 
+                {
+                    break;
+                }
+            }
+
+            let color = if hit {
+                [0xFF, 0xFF, 0xFF, 0xFF]
+            } else {
+                [0x00, 0x00, 0x00, 0xFF]
+            };
+            
+            pixel.copy_from_slice(&color);
         }
     }
 }
