@@ -2,22 +2,30 @@ use crate::scene::{self, get_normal, scene_sdf};
 use glam::Vec3;
 use pixels::Pixels;
 use std::sync::Arc;
-use winit::{event::WindowEvent, event_loop::ActiveEventLoop, window::Window};
+use winit::{event::{WindowEvent, ElementState, KeyEvent}, event_loop::ActiveEventLoop, window::Window, keyboard::{KeyCode, PhysicalKey}};
 
 pub struct App<'a> {
     window: Arc<Window>,
     pixels: Pixels<'a>,
     width: u32,
     height: u32,
+    camera_pos: Vec3,
 }
 
 impl<'a> App<'a> {
-    pub fn new(window: Arc<Window>, pixels: Pixels<'a>, width: u32, height: u32) -> Self {
+    pub fn new(
+        window: Arc<Window>,
+        pixels: Pixels<'a>,
+        width: u32,
+        height: u32,
+        camera_pos: Vec3,
+    ) -> Self {
         Self {
             window,
             pixels,
             width,
             height,
+            camera_pos,
         }
     }
 
@@ -44,6 +52,27 @@ impl<'a> App<'a> {
 
                 self.window.request_redraw();
             }
+            WindowEvent::KeyboardInput { event, .. } => {
+                if event.state == ElementState::Pressed {
+                    let move_speed = 0.2;
+                    match event.physical_key {
+                        PhysicalKey::Code(KeyCode::KeyW) => {
+                            self.camera_pos.z += move_speed;
+                        }
+                        PhysicalKey::Code(KeyCode::KeyS) => {
+                            self.camera_pos.z -= move_speed;
+                        }
+                        PhysicalKey::Code(KeyCode::KeyA) => {
+                            self.camera_pos.x -= move_speed;
+                        }
+                        PhysicalKey::Code(KeyCode::KeyD) => {
+                            self.camera_pos.x += move_speed;
+                        }
+                        _ => (),
+                    }
+                }
+            }
+
             WindowEvent::RedrawRequested => {
                 self.draw();
 
@@ -62,13 +91,12 @@ impl<'a> App<'a> {
     fn draw(&mut self) {
         let aspect_ratio = self.width as f32 / self.height as f32;
 
-        let camera_pos = Vec3::new(0.0, 0.0, -3.0);
+        let camera_pos = self.camera_pos;
         let focal_length = 0.5;
 
         // from surface to light source !!!
         // let light_dir = Vec3::new(0.5, 0.5, -1.0).normalize();
         let light_dir = Vec3::new(0.0, 0.5, -1.0).normalize();
-
 
         let mut colors: Vec<[u8; 4]> = vec![[0; 4]; (self.width * self.height) as usize];
 
@@ -84,7 +112,7 @@ impl<'a> App<'a> {
                 let final_color = if let Some((point, color)) = hit_info {
                     self.get_color_for_hit(point, light_dir, color)
                 } else {
-                    [0x00, 0x00, 0x00, 0xFF] 
+                    [0x00, 0x00, 0x00, 0xFF]
                 };
 
                 let index = (y as usize * self.width as usize) + x as usize;
@@ -136,7 +164,11 @@ impl<'a> App<'a> {
 
         let diffuse_intensity = normal.dot(light_dir).max(0.0);
 
-        let shadow_factor = if self.in_shadow(hit_point, light_dir) { 0.1 } else { 1.0 };   
+        let shadow_factor = if self.in_shadow(hit_point, light_dir) {
+            0.1
+        } else {
+            1.0
+        };
 
         let ambient_light = 0.1;
         let final_intensity = diffuse_intensity * shadow_factor + ambient_light;

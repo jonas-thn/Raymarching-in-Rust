@@ -2,7 +2,6 @@ mod app;
 mod scene;
 
 use app::App;
-
 use pixels::{Pixels, SurfaceTexture};
 use std::sync::Arc;
 use winit::{
@@ -11,6 +10,7 @@ use winit::{
     event_loop::{ControlFlow, EventLoop},
     window::Window,
 };
+use glam::Vec3;
 
 const WIDTH: u32 = 800;
 const HEIGHT: u32 = 600;
@@ -45,7 +45,7 @@ fn main() {
                     Pixels::new(WIDTH, HEIGHT, surface_texture).unwrap()
                 };
 
-                app = Some(App::new(window, pixels, WIDTH, HEIGHT));
+                app = Some(App::new(window, pixels, WIDTH, HEIGHT, Vec3::new(0.0, 0.0, -3.0)));
             }
 
             Event::WindowEvent {
