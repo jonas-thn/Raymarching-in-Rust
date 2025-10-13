@@ -19,6 +19,7 @@ pub struct App<'a> {
     camera: Camera,
     last_frame_time: Instant,
     keys: Keys,
+    time: f32
 }
 
 #[derive(Default)] 
@@ -46,6 +47,7 @@ impl<'a> App<'a> {
             camera: Camera::new(Vec3::new(0.0, 0.0, -3.0)),
             last_frame_time: Instant::now(),
             keys: Keys::default(),
+            time: 0.0
         }
     }
 
@@ -112,6 +114,7 @@ impl<'a> App<'a> {
         let now = Instant::now();
         let dt = (now - self.last_frame_time).as_secs_f32();
         self.last_frame_time = now;
+        self.time += dt;
 
         if self.keys.w { self.camera.move_forward(dt); }
         if self.keys.s { self.camera.move_backward(dt); }
@@ -162,7 +165,7 @@ impl<'a> App<'a> {
     fn raymarch(&self, ray_origin: Vec3, ray_dir: Vec3) -> Option<(Vec3, Vec3)> {
         let mut current_pos = ray_origin;
         for _ in 0..MAX_STEPS {
-            let (dist_to_scene, color) = scene_sdf(current_pos);
+            let (dist_to_scene, color) = scene_sdf(current_pos, self.time);
             if dist_to_scene < HIT_THRESHOLD {
                 return Some((current_pos, color));
             }
@@ -175,10 +178,10 @@ impl<'a> App<'a> {
     }
 
     fn in_shadow(&self, point: Vec3, direction: Vec3) -> bool {
-        let mut current_pos = point + get_normal(point) * 0.01;
+        let mut current_pos = point + get_normal(point, self.time) * 0.01;
 
         for _ in 0..MAX_SHADOW_STEPS {
-            let dist_to_scene = scene_sdf(current_pos).0;
+            let dist_to_scene = scene_sdf(current_pos, self.time).0;
 
             if dist_to_scene < HIT_THRESHOLD {
                 return true;
@@ -191,7 +194,7 @@ impl<'a> App<'a> {
     }
 
     fn get_color_for_hit(&self, hit_point: Vec3, light_dir: Vec3, base_color: Vec3) -> [u8; 4] {
-        let normal = get_normal(hit_point);
+        let normal = get_normal(hit_point, self.time);
 
         let diffuse_intensity = normal.dot(light_dir).max(0.0);
 

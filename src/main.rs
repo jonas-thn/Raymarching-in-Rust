@@ -16,7 +16,7 @@ use winit::{
 const WIDTH: u32 = 800;
 const HEIGHT: u32 = 600;
 
-const RENDER_SCALE: f32 = 0.5;
+const RENDER_SCALE: f32 = 0.25;
 
 fn main() {
     env_logger::init();
