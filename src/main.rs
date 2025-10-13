@@ -13,11 +13,10 @@ use winit::{
     window::Window,
 };
 
-// const WIDTH: u32 = 800;
-// const HEIGHT: u32 = 600;
+const WIDTH: u32 = 800;
+const HEIGHT: u32 = 600;
 
-const WIDTH: u32 = 640;
-const HEIGHT: u32 = 480;
+const RENDER_SCALE: f32 = 0.5;
 
 fn main() {
     env_logger::init();
@@ -44,14 +43,22 @@ fn main() {
                     let window_size = window.inner_size();
                     let surface_texture =
                         SurfaceTexture::new(window_size.width, window_size.height, window.clone());
-                    Pixels::new(WIDTH, HEIGHT, surface_texture).unwrap()
+
+                    let render_width = (window_size.width as f32 * RENDER_SCALE) as u32;
+                    let render_height = (window_size.height as f32 * RENDER_SCALE) as u32;
+                    
+                    Pixels::new(render_width, render_height, surface_texture).unwrap()
                 };
+
+                let initial_render_width = (WIDTH as f32 * RENDER_SCALE) as u32;
+                let initial_render_height = (HEIGHT as f32 * RENDER_SCALE) as u32;
 
                 app = Some(App::new(
                     window,
                     pixels,
-                    WIDTH,
-                    HEIGHT,
+                    initial_render_width,
+                    initial_render_height,
+                    RENDER_SCALE
                 ));
             }
 

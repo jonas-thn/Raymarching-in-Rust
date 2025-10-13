@@ -6,23 +6,28 @@ use std::sync::Arc;
 use std::time::Instant;
 use winit::{event::{WindowEvent, ElementState, KeyEvent}, event_loop::ActiveEventLoop, window::Window, keyboard::{KeyCode, PhysicalKey}};
 
+const MAX_STEPS: u32 = 32;
+const MAX_SHADOW_STEPS: u32 = 16;
+const HIT_THRESHOLD: f32 = 0.001;   
+
 pub struct App<'a> {
     pub window: Arc<Window>,
     pixels: Pixels<'a>,
     width: u32,
     height: u32,
+    render_scale: f32,
     camera: Camera,
     last_frame_time: Instant,
     keys: Keys,
 }
 
 #[derive(Default)] 
-    struct Keys {
-        w: bool,
-        a: bool,
-        s: bool,
-        d: bool,
-    }
+struct Keys {
+    w: bool,
+    a: bool,
+    s: bool,
+    d: bool,
+}
 
 impl<'a> App<'a> {
     pub fn new(
@@ -30,12 +35,14 @@ impl<'a> App<'a> {
         pixels: Pixels<'a>,
         width: u32,
         height: u32,
+        render_scale: f32
     ) -> Self {
         Self {
             window,
             pixels,
             width,
             height,
+            render_scale,
             camera: Camera::new(Vec3::new(0.0, 0.0, -3.0)),
             last_frame_time: Instant::now(),
             keys: Keys::default(),
@@ -48,6 +55,9 @@ impl<'a> App<'a> {
                 return false;
             }
             WindowEvent::Resized(size) => {
+                let new_render_width = (size.width as f32 * self.render_scale).max(1.0) as u32;
+                let new_render_height = (size.height as f32 * self.render_scale).max(1.0) as u32;
+
                 self.width = size.width;
                 self.height = size.height;
 
@@ -56,10 +66,13 @@ impl<'a> App<'a> {
                     elwt.exit();
                 }
 
-                if let Err(err) = self.pixels.resize_buffer(size.width, size.height) {
+                if let Err(err) = self.pixels.resize_buffer(new_render_width, new_render_height) {
                     log::error!("Resize Buffer failed: {err}");
                     elwt.exit();
                 }
+
+                self.width = new_render_width;
+                self.height = new_render_height;
 
                 self.window.request_redraw();
             }
@@ -88,7 +101,7 @@ impl<'a> App<'a> {
             }
 
             _ => {
-                self.window.request_redraw();
+                
             }
         }
 
@@ -148,9 +161,9 @@ impl<'a> App<'a> {
 
     fn raymarch(&self, ray_origin: Vec3, ray_dir: Vec3) -> Option<(Vec3, Vec3)> {
         let mut current_pos = ray_origin;
-        for _ in 0..32 {
+        for _ in 0..MAX_STEPS {
             let (dist_to_scene, color) = scene_sdf(current_pos);
-            if dist_to_scene < 0.001 {
+            if dist_to_scene < HIT_THRESHOLD {
                 return Some((current_pos, color));
             }
             current_pos += ray_dir * dist_to_scene;
@@ -164,10 +177,10 @@ impl<'a> App<'a> {
     fn in_shadow(&self, point: Vec3, direction: Vec3) -> bool {
         let mut current_pos = point + get_normal(point) * 0.01;
 
-        for _ in 0..50 {
+        for _ in 0..MAX_SHADOW_STEPS {
             let dist_to_scene = scene_sdf(current_pos).0;
 
-            if dist_to_scene < 0.001 {
+            if dist_to_scene < HIT_THRESHOLD {
                 return true;
             }
 
@@ -183,16 +196,16 @@ impl<'a> App<'a> {
         let diffuse_intensity = normal.dot(light_dir).max(0.0);
 
         let shadow_factor = if self.in_shadow(hit_point, light_dir) {
-            0.1
+            0.05
         } else {
             1.0
         };
 
-        let ambient_light = 0.1;
+        let ambient_light = 0.05;
         let final_intensity = diffuse_intensity * shadow_factor + ambient_light;
         let mut color_vec = base_color * final_intensity;
 
-        color_vec = color_vec.powf(1.0 / 2.2);
+        // color_vec = color_vec.powf(1.0 / 2.2);
 
         [
             (color_vec.x.clamp(0.0, 1.0) * 255.0) as u8,
