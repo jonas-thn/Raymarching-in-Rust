@@ -1,16 +1,28 @@
+use crate::camera::Camera;
 use crate::scene::{self, get_normal, scene_sdf};
 use glam::Vec3;
 use pixels::Pixels;
 use std::sync::Arc;
+use std::time::Instant;
 use winit::{event::{WindowEvent, ElementState, KeyEvent}, event_loop::ActiveEventLoop, window::Window, keyboard::{KeyCode, PhysicalKey}};
 
 pub struct App<'a> {
-    window: Arc<Window>,
+    pub window: Arc<Window>,
     pixels: Pixels<'a>,
     width: u32,
     height: u32,
-    camera_pos: Vec3,
+    camera: Camera,
+    last_frame_time: Instant,
+    keys: Keys,
 }
+
+#[derive(Default)] 
+    struct Keys {
+        w: bool,
+        a: bool,
+        s: bool,
+        d: bool,
+    }
 
 impl<'a> App<'a> {
     pub fn new(
@@ -18,22 +30,22 @@ impl<'a> App<'a> {
         pixels: Pixels<'a>,
         width: u32,
         height: u32,
-        camera_pos: Vec3,
     ) -> Self {
         Self {
             window,
             pixels,
             width,
             height,
-            camera_pos,
+            camera: Camera::new(Vec3::new(0.0, 0.0, -3.0)),
+            last_frame_time: Instant::now(),
+            keys: Keys::default(),
         }
     }
 
-    pub fn handle_event(&mut self, event: WindowEvent, elwt: &ActiveEventLoop) {
+    pub fn handle_event(&mut self, event: WindowEvent, elwt: &ActiveEventLoop) -> bool {
         match event {
             WindowEvent::CloseRequested => {
-                println!("Window closed!");
-                elwt.exit();
+                return false;
             }
             WindowEvent::Resized(size) => {
                 self.width = size.width;
@@ -47,33 +59,26 @@ impl<'a> App<'a> {
                 if let Err(err) = self.pixels.resize_buffer(size.width, size.height) {
                     log::error!("Resize Buffer failed: {err}");
                     elwt.exit();
-                    return;
                 }
 
                 self.window.request_redraw();
             }
             WindowEvent::KeyboardInput { event, .. } => {
-                if event.state == ElementState::Pressed {
-                    let move_speed = 0.2;
-                    match event.physical_key {
-                        PhysicalKey::Code(KeyCode::KeyW) => {
-                            self.camera_pos.z += move_speed;
-                        }
-                        PhysicalKey::Code(KeyCode::KeyS) => {
-                            self.camera_pos.z -= move_speed;
-                        }
-                        PhysicalKey::Code(KeyCode::KeyA) => {
-                            self.camera_pos.x -= move_speed;
-                        }
-                        PhysicalKey::Code(KeyCode::KeyD) => {
-                            self.camera_pos.x += move_speed;
-                        }
-                        _ => (),
+                if let PhysicalKey::Code(key) = event.physical_key {
+                    let is_pressed = event.state == ElementState::Pressed;
+                    match key {
+                        KeyCode::KeyW => self.keys.w = is_pressed,
+                        KeyCode::KeyA => self.keys.a = is_pressed,
+                        KeyCode::KeyS => self.keys.s = is_pressed,
+                        KeyCode::KeyD => self.keys.d = is_pressed,
+                        _ => {}
                     }
                 }
+
             }
 
             WindowEvent::RedrawRequested => {
+                self.update();
                 self.draw();
 
                 if let Err(err) = self.pixels.render() {
@@ -86,13 +91,26 @@ impl<'a> App<'a> {
                 self.window.request_redraw();
             }
         }
+
+        true
+    }
+
+    fn update (&mut self) {
+        let now = Instant::now();
+        let dt = (now - self.last_frame_time).as_secs_f32();
+        self.last_frame_time = now;
+
+        if self.keys.w { self.camera.move_forward(dt); }
+        if self.keys.s { self.camera.move_backward(dt); }
+        if self.keys.a { self.camera.move_left(dt); }
+        if self.keys.d { self.camera.move_right(dt); }
     }
 
     fn draw(&mut self) {
         let aspect_ratio = self.width as f32 / self.height as f32;
 
-        let camera_pos = self.camera_pos;
-        let focal_length = 0.5;
+        let camera_pos = self.camera.position;
+        let focal_length = self.camera.focal_length;
 
         // from surface to light source !!!
         // let light_dir = Vec3::new(0.5, 0.5, -1.0).normalize();
@@ -130,7 +148,7 @@ impl<'a> App<'a> {
 
     fn raymarch(&self, ray_origin: Vec3, ray_dir: Vec3) -> Option<(Vec3, Vec3)> {
         let mut current_pos = ray_origin;
-        for _ in 0..100 {
+        for _ in 0..32 {
             let (dist_to_scene, color) = scene_sdf(current_pos);
             if dist_to_scene < 0.001 {
                 return Some((current_pos, color));
