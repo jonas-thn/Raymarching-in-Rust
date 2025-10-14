@@ -62,11 +62,16 @@ fn main() {
                 ));
             }
 
-            Event::WindowEvent { window_id, event } => {
+            Event::WindowEvent { window_id: _, event } => {
                 if let Some(app) = app.as_mut() {
-                    if !app.handle_event(event, window_target) {
+                    if !app.handle_window_event(event, window_target) {
                         window_target.exit();
                     }
+                }
+            }
+            Event::DeviceEvent { device_id: _, event } => {
+                if let Some(app) = app.as_mut() {
+                    app.handle_device_event(event);
                 }
             }
 

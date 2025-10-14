@@ -4,11 +4,16 @@ use glam::Vec3;
 use pixels::Pixels;
 use std::sync::Arc;
 use std::time::Instant;
-use winit::{event::{WindowEvent, ElementState, KeyEvent}, event_loop::ActiveEventLoop, window::Window, keyboard::{KeyCode, PhysicalKey}};
+use winit::{
+    event::{DeviceEvent, ElementState, KeyEvent, MouseButton, WindowEvent},
+    event_loop::ActiveEventLoop,
+    keyboard::{KeyCode, PhysicalKey},
+    window::{CursorGrabMode, Window},
+};
 
 const MAX_STEPS: u32 = 32;
 const MAX_SHADOW_STEPS: u32 = 16;
-const HIT_THRESHOLD: f32 = 0.001;   
+const HIT_THRESHOLD: f32 = 0.001;
 
 pub struct App<'a> {
     pub window: Arc<Window>,
@@ -19,10 +24,10 @@ pub struct App<'a> {
     camera: Camera,
     last_frame_time: Instant,
     keys: Keys,
-    time: f32
+    time: f32,
 }
 
-#[derive(Default)] 
+#[derive(Default)]
 struct Keys {
     w: bool,
     a: bool,
@@ -36,22 +41,25 @@ impl<'a> App<'a> {
         pixels: Pixels<'a>,
         width: u32,
         height: u32,
-        render_scale: f32
+        render_scale: f32,
     ) -> Self {
+        window.set_cursor_grab(CursorGrabMode::Locked).unwrap();
+        window.set_cursor_visible(false);
+
         Self {
             window,
             pixels,
             width,
             height,
             render_scale,
-            camera: Camera::new(Vec3::new(0.0, 0.0, -3.0)),
+            camera: Camera::new(Vec3::new(0.0, 0.0, -4.0)),
             last_frame_time: Instant::now(),
             keys: Keys::default(),
-            time: 0.0
+            time: 0.0,
         }
     }
 
-    pub fn handle_event(&mut self, event: WindowEvent, elwt: &ActiveEventLoop) -> bool {
+    pub fn handle_window_event(&mut self, event: WindowEvent, elwt: &ActiveEventLoop) -> bool {
         match event {
             WindowEvent::CloseRequested => {
                 return false;
@@ -68,7 +76,10 @@ impl<'a> App<'a> {
                     elwt.exit();
                 }
 
-                if let Err(err) = self.pixels.resize_buffer(new_render_width, new_render_height) {
+                if let Err(err) = self
+                    .pixels
+                    .resize_buffer(new_render_width, new_render_height)
+                {
                     log::error!("Resize Buffer failed: {err}");
                     elwt.exit();
                 }
@@ -86,10 +97,17 @@ impl<'a> App<'a> {
                         KeyCode::KeyA => self.keys.a = is_pressed,
                         KeyCode::KeyS => self.keys.s = is_pressed,
                         KeyCode::KeyD => self.keys.d = is_pressed,
+
+                        KeyCode::Escape => {
+                            if is_pressed {
+                                elwt.exit();
+                                self.window.set_cursor_grab(CursorGrabMode::None).unwrap();
+                                self.window.set_cursor_visible(true);
+                            }
+                        }
                         _ => {}
                     }
                 }
-
             }
 
             WindowEvent::RedrawRequested => {
@@ -102,24 +120,36 @@ impl<'a> App<'a> {
                 }
             }
 
-            _ => {
-                
-            }
+            _ => {}
         }
 
         true
     }
 
-    fn update (&mut self) {
+    pub fn handle_device_event(&mut self, event: DeviceEvent) {
+        if let DeviceEvent::MouseMotion { delta } = event {
+            self.camera.update_rotation(delta.0 as f32, delta.1 as f32);
+        }
+    }
+
+    fn update(&mut self) {
         let now = Instant::now();
         let dt = (now - self.last_frame_time).as_secs_f32();
         self.last_frame_time = now;
         self.time += dt;
 
-        if self.keys.w { self.camera.move_forward(dt); }
-        if self.keys.s { self.camera.move_backward(dt); }
-        if self.keys.a { self.camera.move_left(dt); }
-        if self.keys.d { self.camera.move_right(dt); }
+        if self.keys.w {
+            self.camera.move_forward(dt);
+        }
+        if self.keys.s {
+            self.camera.move_backward(dt);
+        }
+        if self.keys.a {
+            self.camera.move_left(dt);
+        }
+        if self.keys.d {
+            self.camera.move_right(dt);
+        }
     }
 
     fn draw(&mut self) {
@@ -138,8 +168,8 @@ impl<'a> App<'a> {
             for x in 0..self.width {
                 let u = (x as f32 / self.width as f32) - 0.5;
                 let v = (y as f32 / self.height as f32) - 0.5;
-                let u_corrected = u * aspect_ratio;
-                let ray_dir = Vec3::new(u_corrected, -v, focal_length).normalize();
+
+                let ray_dir = self.camera.calculate_ray_dir(u, v, aspect_ratio);
 
                 let hit_info = self.raymarch(camera_pos, ray_dir);
 
@@ -208,7 +238,7 @@ impl<'a> App<'a> {
         let final_intensity = diffuse_intensity * shadow_factor + ambient_light;
         let mut color_vec = base_color * final_intensity;
 
-        // color_vec = color_vec.powf(1.0 / 2.2);
+        color_vec = color_vec.powf(0.5);
 
         [
             (color_vec.x.clamp(0.0, 1.0) * 255.0) as u8,
